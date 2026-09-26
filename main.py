@@ -1,12 +1,11 @@
 from fastapi import FastAPI, HTTPException
+from typing import Literal
+
 from database import create_table, get_connection
 from models import MovieCreate, MovieUpdate
 
 app = FastAPI(title="Movie Collection API")
 create_table()
-@app.get("/")
-def home():
-    return {"message": "Movie Collection API is running"}
 @app.get("/movies")
 def get_movies():
     connection = get_connection()
@@ -18,6 +17,7 @@ def get_movies():
 @app.post("/create_movies", status_code=201)
 def create_movie(movie: MovieCreate):
     connection = get_connection()
+
     existing_movie = connection.execute(
         "SELECT * FROM movies WHERE movie_id = ?",
         (movie.movie_id,)
@@ -50,6 +50,19 @@ def create_movie(movie: MovieCreate):
     ).fetchone()
     connection.close()
     return dict(new_movie)
+@app.get("/movies/sort")
+def sort_movies(
+    sort_by: Literal["duration", "rating"] = "rating",
+    order: Literal["asc", "desc"] = "desc"
+):
+    connection = get_connection()
+    query = f"""
+        SELECT * FROM movies
+        ORDER BY {sort_by} {order}
+    """
+    movies = connection.execute(query).fetchall()
+    connection.close()
+    return [dict(movie) for movie in movies]
 @app.get("/movies/{movie_id}")
 def get_movie(movie_id: int):
     connection = get_connection()
@@ -110,6 +123,7 @@ def delete_movie(movie_id: int):
         "SELECT * FROM movies WHERE movie_id = ?",
         (movie_id,)
     ).fetchone()
+
     if movie is None:
         connection.close()
         raise HTTPException(
@@ -125,28 +139,3 @@ def delete_movie(movie_id: int):
     return {
         "message": "Movie deleted successfully"
     }
-@app.get("/movies/sort")
-def sort_movies(
-    sort_by: str = "rating",
-    order: str = "desc"
-):
-    connection = get_connection()
-    if sort_by not in ["duration", "rating"]:
-        connection.close()
-        raise HTTPException(
-            status_code=400,
-            detail="sort_by must be duration or rating"
-        )
-    if order not in ["asc", "desc"]:
-        connection.close()
-        raise HTTPException(
-            status_code=400,
-            detail="order must be asc or desc"
-        )
-    query = f"""
-        SELECT * FROM movies
-        ORDER BY {sort_by} {order}
-    """
-    movies = connection.execute(query).fetchall()
-    connection.close()
-    return [dict(movie) for movie in movies]
